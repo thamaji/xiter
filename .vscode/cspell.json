@@ -1,0 +1,16 @@
+{
+    "useGitignore": true,
+    "ignorePaths": [
+        ".git/objects/**",
+        "**/.gitignore",
+        ".devcontainer/**",
+        ".vscode/**",
+        "**/vendor/**",
+        "**/go.mod",
+        "**/go.sum"
+    ],
+    "words": [
+        "thamaji",
+        "xiter"
+    ]
+}
