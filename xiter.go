@@ -16,6 +16,17 @@ func Seq[V any](values ...V) iter.Seq[V] {
 	}
 }
 
+// マップからイテレータをつくる。
+func Seq2[K comparable, V any](m map[K]V) iter.Seq2[K, V] {
+	return func(yield func(K, V) bool) {
+		for k, v := range m {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
 // ポインタからイテレータをつくる。
 func Optional[V any](v *V) iter.Seq[V] {
 	return func(yield func(V) bool) {
@@ -33,7 +44,7 @@ type Entry[K any, V any] struct {
 	Value V
 }
 
-// マップからイテレータをつくる。
+// マップからキーと値のペアのイテレータをつくる。
 func Entries[K comparable, V any](m map[K]V) iter.Seq[Entry[K, V]] {
 	return func(yield func(Entry[K, V]) bool) {
 		for k, v := range m {
@@ -42,6 +53,24 @@ func Entries[K comparable, V any](m map[K]V) iter.Seq[Entry[K, V]] {
 			}
 		}
 	}
+}
+
+// イテレータを配列に変換する。
+func ToArray[V any](seq iter.Seq[V]) []V {
+	arr := []V{}
+	for v := range seq {
+		arr = append(arr, v)
+	}
+	return arr
+}
+
+// イテレータをマップに変換する。
+func ToMap[K comparable, V any](seq iter.Seq2[K, V]) map[K]V {
+	m := map[K]V{}
+	for k, v := range seq {
+		m[k] = v
+	}
+	return m
 }
 
 // イテレータの末尾に値を追加する。
@@ -559,4 +588,87 @@ func GroupBy[K comparable, V any](seq iter.Seq[V], f func(V) K) map[K][]V {
 	}
 
 	return m
+}
+
+// size 個ずつの配列を返すイテレーターを返す。
+func Grouped[V any](seq iter.Seq[V], size int) iter.Seq[[]V] {
+	if size <= 0 {
+		panic("size must be > 0")
+	}
+
+	return func(yield func([]V) bool) {
+		group := make([]V, 0, size)
+
+		for v := range seq {
+			group = append(group, v)
+
+			if len(group) >= size {
+				if !yield(group) {
+					return
+				}
+
+				group = group[:0]
+			}
+		}
+
+		if len(group) > 0 {
+			_ = yield(group)
+		}
+	}
+}
+
+// size 個ずつの配列を step ずつずらして返すイテレーターを返す。
+func Sliding[V any](seq iter.Seq[V], size int, step int) iter.Seq[[]V] {
+	if size <= 0 || step <= 0 {
+		panic("size and step must be > 0")
+	}
+
+	if step >= size {
+		return func(yield func([]V) bool) {
+			window := make([]V, 0, size)
+			skip := 0
+
+			for v := range seq {
+				if skip > 0 {
+					skip--
+					continue
+				}
+
+				window = append(window, v)
+
+				if len(window) >= size {
+					if !yield(window) {
+						return
+					}
+
+					window = window[:0]
+					skip = step - size
+				}
+			}
+
+			if len(window) > 0 {
+				_ = yield(window)
+			}
+		}
+	}
+
+	return func(yield func([]V) bool) {
+		window := make([]V, 0, size)
+
+		for v := range seq {
+			window = append(window, v)
+
+			if len(window) >= size {
+				if !yield(window) {
+					return
+				}
+
+				window = window[step:]
+			}
+		}
+
+		if len(window) > 0 {
+			_ = yield(window)
+		}
+	}
 }
