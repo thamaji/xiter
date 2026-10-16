@@ -115,12 +115,12 @@ func Insert[V any](seq iter.Seq[V], index int, values ...V) iter.Seq[V] {
 		i := 0
 
 		for v := range seq {
-			for i >= index && i < index+len(values) {
-				if !yield(values[i-index]) {
-					return
+			if i == index {
+				for _, v := range values {
+					if !yield(v) {
+						return
+					}
 				}
-
-				i++
 			}
 
 			if !yield(v) {
@@ -128,6 +128,14 @@ func Insert[V any](seq iter.Seq[V], index int, values ...V) iter.Seq[V] {
 			}
 
 			i++
+		}
+
+		if i == index {
+			for _, v := range values {
+				if !yield(v) {
+					return
+				}
+			}
 		}
 	}
 }
@@ -303,16 +311,18 @@ func Find[V any](seq iter.Seq[V], f func(V) bool) (V, bool) {
 
 // ひとつめの old を new で置き換えたイテレータを返す。
 func Replace[V comparable](seq iter.Seq[V], old V, new V) iter.Seq[V] {
-	done := false
-
-	return Map(seq, func(v V) V {
-		if !done && v == old {
-			done = true
-			return new
+	return func(aYieldFunc func(V) bool) {
+		done := false
+		for v := range seq {
+			if !done && v == old {
+				done = true
+				v = new
+			}
+			if !aYieldFunc(v) {
+				return
+			}
 		}
-
-		return v
-	})
+	}
 }
 
 // すべての old を new で置き換えたイテレータを返す。
@@ -359,12 +369,23 @@ func Collect[V1 any, V2 any](seq iter.Seq[V1], f func(V1) (V2, bool)) iter.Seq[V
 
 // 先頭n個の値のイテレータを返す。
 func Take[V any](seq iter.Seq[V], n int) iter.Seq[V] {
-	i := 0
-	return TakeWhile(seq, func(v V) bool {
-		ok := i < n
-		i++
-		return ok
-	})
+	return func(yield func(V) bool) {
+		if n <= 0 {
+			return
+		}
+
+		c := n
+		for v := range seq {
+			if !yield(v) {
+				return
+			}
+
+			c--
+			if c == 0 {
+				return
+			}
+		}
+	}
 }
 
 // 条件を満たし続ける先頭の値のイテレータを返す。
@@ -384,18 +405,26 @@ func TakeWhile[V any](seq iter.Seq[V], f func(V) bool) iter.Seq[V] {
 
 // 先頭n個の値を除いたイテレータを返す。
 func Drop[V any](seq iter.Seq[V], n int) iter.Seq[V] {
-	i := 0
-	return DropWhile(seq, func(v V) bool {
-		ok := i < n
-		i++
-		return ok
-	})
+	return func(yield func(V) bool) {
+		c := n
+		for v := range seq {
+			if c > 0 {
+				c--
+				continue
+			}
+
+			if !yield(v) {
+				return
+			}
+		}
+	}
 }
 
 // 条件を満たし続ける先頭の値を除いたイテレータを返す。
 func DropWhile[V any](seq iter.Seq[V], f func(V) bool) iter.Seq[V] {
-	done := false
 	return func(yield func(V) bool) {
+		done := false
+
 		for v := range seq {
 			if !done && f(v) {
 				continue
@@ -492,6 +521,7 @@ func ZipWithIndex[V any](seq iter.Seq[V]) iter.Seq2[int, V] {
 			if !yield(i, v) {
 				return
 			}
+			i++
 		}
 	}
 }
@@ -603,7 +633,8 @@ func Grouped[V any](seq iter.Seq[V], size int) iter.Seq[[]V] {
 			group = append(group, v)
 
 			if len(group) >= size {
-				if !yield(group) {
+				clone := append(make([]V, 0, len(group)), group...)
+				if !yield(clone) {
 					return
 				}
 
@@ -612,7 +643,8 @@ func Grouped[V any](seq iter.Seq[V], size int) iter.Seq[[]V] {
 		}
 
 		if len(group) > 0 {
-			_ = yield(group)
+			clone := append(make([]V, 0, len(group)), group...)
+			_ = yield(clone)
 		}
 	}
 }
@@ -637,7 +669,8 @@ func Sliding[V any](seq iter.Seq[V], size int, step int) iter.Seq[[]V] {
 				window = append(window, v)
 
 				if len(window) >= size {
-					if !yield(window) {
+					clone := append(make([]V, 0, len(window)), window...)
+					if !yield(clone) {
 						return
 					}
 
@@ -647,7 +680,8 @@ func Sliding[V any](seq iter.Seq[V], size int, step int) iter.Seq[[]V] {
 			}
 
 			if len(window) > 0 {
-				_ = yield(window)
+				clone := append(make([]V, 0, len(window)), window...)
+				_ = yield(clone)
 			}
 		}
 	}
@@ -659,7 +693,8 @@ func Sliding[V any](seq iter.Seq[V], size int, step int) iter.Seq[[]V] {
 			window = append(window, v)
 
 			if len(window) >= size {
-				if !yield(window) {
+				clone := append(make([]V, 0, len(window)), window...)
+				if !yield(clone) {
 					return
 				}
 
@@ -668,7 +703,8 @@ func Sliding[V any](seq iter.Seq[V], size int, step int) iter.Seq[[]V] {
 		}
 
 		if len(window) > 0 {
-			_ = yield(window)
+			clone := append(make([]V, 0, len(window)), window...)
+			_ = yield(clone)
 		}
 	}
 }
